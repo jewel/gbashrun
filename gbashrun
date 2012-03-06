@@ -1,0 +1,139 @@
+#!/usr/bin/env ruby
+
+require 'gtk2'
+require 'pty'
+
+Dir.chdir ENV["HOME"]
+
+term_read, term_write, term_err = PTY.spawn "sh -c 'TERM=none bash --login'"
+
+window = Gtk::Window.new Gtk::Window::TOPLEVEL
+
+window.flags |= Gtk::Widget::CAN_FOCUS
+window.title = "gbashrun"
+window.keep_above = true
+window.modal = true
+window.set_size_request 600, 150
+window.signal_connect :delete_event do
+  Gtk.main_quit
+end
+
+ctrl = false
+alt = false
+
+line = ""
+
+done = false
+
+window.signal_connect("key-press-event") do |w, e|
+  # puts "#{Gdk::Keyval.to_name(e.keyval)} #{e.keyval}"
+
+  key = nil
+  case e.keyval
+  when Gdk::Keyval::GDK_Escape
+    Gdk.keyboard_ungrab Gdk::Event::CURRENT_TIME
+    Gtk.main_quit
+  when Gdk::Keyval::GDK_Control_L, Gdk::Keyval::GDK_Control_R
+    ctrl = true
+  when Gdk::Keyval::GDK_Alt_L, Gdk::Keyval::GDK_Alt_R
+   alt = true
+  when Gdk::Keyval::GDK_BackSpace
+    key = 8.chr
+  when Gdk::Keyval::GDK_Up
+    key = "\e[A"
+  when Gdk::Keyval::GDK_Down
+    key = "\e[B"
+  when Gdk::Keyval::GDK_Right
+    key = "\e[C"
+  when Gdk::Keyval::GDK_Left
+    key = "\e[D"
+  when Gdk::Keyval::GDK_Tab
+    key = "\t"
+  when Gdk::Keyval::GDK_Return
+    term_write.write "\r"
+    term_write.write "\x4" # ctrl-d
+    Gdk.keyboard_ungrab Gdk::Event::CURRENT_TIME
+    done = true
+    window.hide
+    next true
+  else
+    key = e.keyval.chr if e.keyval < 128
+    key = (e.keyval - 96).chr if ctrl
+    key = "\e" + key if alt
+  end
+
+  term_write.write key if key
+
+  true
+end
+
+window.signal_connect("key-release-event") do |w, e|
+  case e.keyval
+  when Gdk::Keyval::GDK_Control_L, Gdk::Keyval::GDK_Control_R
+    ctrl = false
+  when Gdk::Keyval::GDK_Alt_L, Gdk::Keyval::GDK_Alt_R
+    alt = false
+  end
+  true
+end
+
+textview = Gtk::TextView.new
+
+pos = 0
+line = ""
+
+Gdk::Input.add term_read, Gdk::Input::READ do
+  begin
+    input = term_read.readpartial( 1024 )
+  rescue Errno::EIO
+    if done
+      Gtk.main_quit
+      next
+    end
+    raise $!
+  end
+  # p input
+  # remove coloring
+  input.gsub! /\e\[\d+(?>(;\d+)*)?m/, ''
+  b = textview.buffer
+  b.delete b.get_iter_at_line( b.line_count ), b.end_iter 
+  # handle control characters
+  input.each_char do |c|
+    case c
+    when "\a"
+      # beep
+    when "\n"
+      b.insert b.end_iter, line + "\n"
+      line = ""
+      pos = 0
+    when "\b"
+      pos -= 1
+    when "\r"
+      pos = 0
+    when /[^[:print:]]/
+    else
+      line[pos] = c
+      pos += 1
+    end
+  end
+  b.insert b.end_iter, line
+  b.place_cursor b.get_iter_at_line_offset( b.line_count, pos )
+
+  true
+end
+
+scroll = Gtk::ScrolledWindow.new
+
+textview.signal_connect("size-allocate") do |widget, step, arg2|
+  scroll.vadjustment.value = scroll.vadjustment.upper - scroll.vadjustment.page_size
+end
+
+window.add scroll
+scroll.add textview
+window.show_all
+
+while Gdk.keyboard_grab(window.window, true, Gdk::Event::CURRENT_TIME) != Gdk::GrabStatus::SUCCESS
+  sleep 0.1
+end
+
+Gtk.main
