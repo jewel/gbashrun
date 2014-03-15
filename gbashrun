@@ -82,7 +82,7 @@ textview.buffer.text = "\n" * 10
 textview.modify_font Pango::FontDescription.new( "monospace 18" )
 
 pos = 0
-line = ""
+line = String.new
 
 Gdk::Input.add term_read, Gdk::Input::READ do
   begin
@@ -110,11 +110,12 @@ Gdk::Input.add term_read, Gdk::Input::READ do
       pos = 0
     when "\b"
       pos -= 1
+      pos = 0 if pos < 0
     when "\r"
       pos = 0
     when /[^[:print:]]/
     else
-      line[pos] = c
+      line[pos,1] = c
       pos += 1
     end
   end
