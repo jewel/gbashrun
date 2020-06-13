@@ -5,7 +5,7 @@ require 'pty'
 
 Dir.chdir ENV["HOME"]
 
-term_read, term_write, term_err = PTY.spawn "sh -c 'TERM=none bash --login'"
+term_read, term_write, term_err = PTY.spawn "sh -c 'TERM=dumb bash --login'"
 
 window = Gtk::Window.new Gtk::Window::TOPLEVEL
 
