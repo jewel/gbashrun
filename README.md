@@ -5,12 +5,12 @@ This is a replacement for the run dialog with full bash completion.
 
 <img src="screenshot.png"/>
 
-It requires the gtk2 ruby bindings, which can be installed with:
+It requires the gtk3 ruby bindings, which can be installed with:
 
-`apt-get install libgtk2-ruby`
+`apt-get install ruby-gtk3`
 
 OR
 
-`gem install gtk2`
+`gem install gtk3`
 
 

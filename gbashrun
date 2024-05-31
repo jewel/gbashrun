@@ -1,15 +1,15 @@
 #!/usr/bin/env ruby
 
-require 'gtk2'
+require 'gtk3'
 require 'pty'
 
 Dir.chdir ENV["HOME"]
 
 term_read, term_write, term_err = PTY.spawn "sh -c 'TERM=dumb bash --login'"
 
-window = Gtk::Window.new Gtk::Window::TOPLEVEL
+window = Gtk::Window.new :toplevel
 
-window.flags |= Gtk::Widget::CAN_FOCUS
+window.set_can_focus true
 window.title = "gbashrun"
 window.keep_above = true
 window.modal = true
@@ -30,29 +30,29 @@ window.signal_connect("key-press-event") do |w, e|
 
   key = nil
   case e.keyval
-  when Gdk::Keyval::GDK_Escape
-    Gdk.keyboard_ungrab Gdk::Event::CURRENT_TIME
+  when Gdk::Keyval::KEY_Escape
+    Gdk.keyboard_ungrab Gdk::CURRENT_TIME
     Gtk.main_quit
-  when Gdk::Keyval::GDK_Control_L, Gdk::Keyval::GDK_Control_R
+  when Gdk::Keyval::KEY_Control_L, Gdk::Keyval::KEY_Control_R
     ctrl = true
-  when Gdk::Keyval::GDK_Alt_L, Gdk::Keyval::GDK_Alt_R
+  when Gdk::Keyval::KEY_Alt_L, Gdk::Keyval::KEY_Alt_R
    alt = true
-  when Gdk::Keyval::GDK_BackSpace
+  when Gdk::Keyval::KEY_BackSpace
     key = 8.chr
-  when Gdk::Keyval::GDK_Up
+  when Gdk::Keyval::KEY_Up
     key = "\e[A"
-  when Gdk::Keyval::GDK_Down
+  when Gdk::Keyval::KEY_Down
     key = "\e[B"
-  when Gdk::Keyval::GDK_Right
+  when Gdk::Keyval::KEY_Right
     key = "\e[C"
-  when Gdk::Keyval::GDK_Left
+  when Gdk::Keyval::KEY_Left
     key = "\e[D"
-  when Gdk::Keyval::GDK_Tab
+  when Gdk::Keyval::KEY_Tab
     key = "\t"
-  when Gdk::Keyval::GDK_Return
+  when Gdk::Keyval::KEY_Return
     term_write.write "\r"
     term_write.write "\x4" # ctrl-d
-    Gdk.keyboard_ungrab Gdk::Event::CURRENT_TIME
+    Gdk.keyboard_ungrab Gdk::CURRENT_TIME
     done = true
     window.hide
     next true
@@ -69,9 +69,9 @@ end
 
 window.signal_connect("key-release-event") do |w, e|
   case e.keyval
-  when Gdk::Keyval::GDK_Control_L, Gdk::Keyval::GDK_Control_R
+  when Gdk::Keyval::KEY_Control_L, Gdk::Keyval::KEY_Control_R
     ctrl = false
-  when Gdk::Keyval::GDK_Alt_L, Gdk::Keyval::GDK_Alt_R
+  when Gdk::Keyval::KEY_Alt_L, Gdk::Keyval::KEY_Alt_R
     alt = false
   end
   true
@@ -79,12 +79,13 @@ end
 
 textview = Gtk::TextView.new
 textview.buffer.text = "\n" * 10
-textview.modify_font Pango::FontDescription.new( "monospace 18" )
+textview.override_font Pango::FontDescription.new( "monospace 18" )
 
 pos = 0
 line = String.new
 
-Gdk::Input.add term_read, Gdk::Input::READ do
+io_channel = GLib::IOChannel.new term_read
+io_channel.add_watch GLib::IOChannel::IN do |channel, condition|
   begin
     input = term_read.readpartial( 1024 )
   rescue Errno::EIO
@@ -94,11 +95,12 @@ Gdk::Input.add term_read, Gdk::Input::READ do
     end
     raise $!
   end
-  # p input
   # remove coloring
   input.gsub! /\e\[\d+(?>(;\d+)*)?m/, ''
+
   b = textview.buffer
-  b.delete b.get_iter_at_line( b.line_count ), b.end_iter 
+  b.delete b.get_iter_at( line: b.line_count - 1), b.end_iter 
+
   # handle control characters
   input.each_char do |c|
     case c
@@ -120,7 +122,7 @@ Gdk::Input.add term_read, Gdk::Input::READ do
     end
   end
   b.insert b.end_iter, line
-  b.place_cursor b.get_iter_at_line_offset( b.line_count, pos )
+  b.place_cursor b.get_iter_at( line: b.line_count - 1, offset: pos )
 
   true
 end
@@ -135,7 +137,7 @@ window.add scroll
 scroll.add textview
 window.show_all
 
-while Gdk.keyboard_grab(window.window, true, Gdk::Event::CURRENT_TIME) != Gdk::GrabStatus::SUCCESS
+while Gdk.keyboard_grab(window.window, true, Gdk::CURRENT_TIME) != Gdk::GrabStatus::SUCCESS
   sleep 0.1
 end
 
