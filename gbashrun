@@ -5,7 +5,7 @@ require 'pty'
 
 Dir.chdir ENV["HOME"]
 
-term_read, term_write, term_err = PTY.spawn "sh -c 'TERM=dumb bash --login'"
+term_read, term_write, pid = PTY.spawn "TERM=dumb exec bash --login"
 
 window = Gtk::Window.new :toplevel
 
@@ -22,8 +22,6 @@ ctrl = false
 alt = false
 
 line = ""
-
-done = false
 
 window.signal_connect("key-press-event") do |w, e|
   # puts "#{Gdk::Keyval.to_name(e.keyval)} #{e.keyval}"
@@ -50,11 +48,10 @@ window.signal_connect("key-press-event") do |w, e|
   when Gdk::Keyval::KEY_Tab
     key = "\t"
   when Gdk::Keyval::KEY_Return
-    term_write.write "\r"
-    term_write.write "\x4" # ctrl-d
+    term_write.write " &\rexit\r"
+    term_write.close
     Gdk.keyboard_ungrab Gdk::CURRENT_TIME
-    done = true
-    window.hide
+    Gtk.main_quit
     next true
   else
     key = e.keyval.chr if e.keyval < 128
@@ -86,15 +83,8 @@ line = String.new
 
 io_channel = GLib::IOChannel.new term_read
 io_channel.add_watch GLib::IOChannel::IN do |channel, condition|
-  begin
-    input = term_read.readpartial( 1024 )
-  rescue Errno::EIO
-    if done
-      Gtk.main_quit
-      next
-    end
-    raise $!
-  end
+  input = term_read.readpartial( 1024 )
+
   # remove coloring
   input.gsub! /\e\[\d+(?>(;\d+)*)?m/, ''
 
