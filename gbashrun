@@ -1,4 +1,4 @@
-#!/usr/bin/env ruby
+#!/usr/bin/ruby --disable-gems
 
 require 'gtk3'
 require 'pty'
@@ -24,8 +24,6 @@ alt = false
 line = ""
 
 window.signal_connect("key-press-event") do |w, e|
-  # puts "#{Gdk::Keyval.to_name(e.keyval)} #{e.keyval}"
-
   key = nil
   case e.keyval
   when Gdk::Keyval::KEY_Escape
@@ -48,10 +46,10 @@ window.signal_connect("key-press-event") do |w, e|
   when Gdk::Keyval::KEY_Tab
     key = "\t"
   when Gdk::Keyval::KEY_Return
-    term_write.write " &\rexit\r"
+    window.hide
+    term_write.write "\rexit\r"
     term_write.close
     Gdk.keyboard_ungrab Gdk::CURRENT_TIME
-    Gtk.main_quit
     next true
   else
     key = e.keyval.chr if e.keyval < 128
@@ -82,6 +80,10 @@ pos = 0
 line = String.new
 
 io_channel = GLib::IOChannel.new term_read
+io_channel.add_watch GLib::IOChannel::HUP do |channel, condition|
+  Gtk.main_quit
+end
+
 io_channel.add_watch GLib::IOChannel::IN do |channel, condition|
   input = term_read.readpartial( 1024 )
 
@@ -126,6 +128,7 @@ end
 window.add scroll
 scroll.add textview
 window.show_all
+window.present
 
 while Gdk.keyboard_grab(window.window, true, Gdk::CURRENT_TIME) != Gdk::GrabStatus::SUCCESS
   sleep 0.1
