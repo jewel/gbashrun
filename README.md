@@ -5,12 +5,20 @@ This is a replacement for the run dialog with full bash completion.
 
 <img src="screenshot.png"/>
 
-It requires the gtk3 ruby bindings, which can be installed with:
+## Install build dependencies (Ubuntu/Debian)
 
-`apt-get install ruby-gtk3`
+```bash
+apt install build-essential pkg-config libgtk-3-dev
+```
 
-OR
+## Build
 
-`gem install gtk3`
+```bash
+make
+```
 
+## Run
 
+```bash
+./gbashrun
+```
