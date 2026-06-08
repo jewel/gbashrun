@@ -290,6 +290,90 @@ static int spawn_shell_pty(pid_t *child_pid) {
   return master_fd;
 }
 
+static void place_window_one_third(GtkWindow *window) {
+  int win_w = 0;
+  int win_h = 0;
+  int screen_x = 0;
+  int screen_y = 0;
+  int screen_w = 0;
+  int screen_h = 0;
+
+  gtk_window_get_size(window, &win_w, &win_h);
+  if (win_w <= 1 || win_h <= 1) {
+    win_w = 800;
+    win_h = 250;
+  }
+
+#if GTK_CHECK_VERSION(3, 22, 0)
+  GdkDisplay *display = gtk_widget_get_display(GTK_WIDGET(window));
+  GdkMonitor *monitor = NULL;
+  if (display != NULL) {
+    GdkWindow *gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
+    if (gdk_window != NULL) {
+      monitor = gdk_display_get_monitor_at_window(display, gdk_window);
+    }
+    if (monitor == NULL) {
+      monitor = gdk_display_get_primary_monitor(display);
+    }
+    if (monitor == NULL) {
+      monitor = gdk_display_get_monitor(display, 0);
+    }
+  }
+  if (monitor != NULL) {
+    GdkRectangle geometry;
+    gdk_monitor_get_geometry(monitor, &geometry);
+    screen_x = geometry.x;
+    screen_y = geometry.y;
+    screen_w = geometry.width;
+    screen_h = geometry.height;
+  }
+#else
+  GdkScreen *screen = gtk_window_get_screen(window);
+  if (screen != NULL) {
+    int monitor_num = gdk_screen_get_primary_monitor(screen);
+    GdkRectangle geometry;
+    if (monitor_num < 0) {
+      monitor_num = 0;
+    }
+    gdk_screen_get_monitor_geometry(screen, monitor_num, &geometry);
+    screen_x = geometry.x;
+    screen_y = geometry.y;
+    screen_w = geometry.width;
+    screen_h = geometry.height;
+  }
+#endif
+
+  if (screen_w <= 0 || screen_h <= 0) {
+    return;
+  }
+
+  int x = screen_x + (screen_w / 3) - (win_w / 2);
+  int y = screen_y + (screen_h / 3) - (win_h / 2);
+  int max_x = screen_x + screen_w - win_w;
+  int max_y = screen_y + screen_h - win_h;
+
+  if (x < screen_x) {
+    x = screen_x;
+  }
+  if (y < screen_y) {
+    y = screen_y;
+  }
+  if (max_x < screen_x) {
+    max_x = screen_x;
+  }
+  if (max_y < screen_y) {
+    max_y = screen_y;
+  }
+  if (x > max_x) {
+    x = max_x;
+  }
+  if (y > max_y) {
+    y = max_y;
+  }
+
+  gtk_window_move(window, x, y);
+}
+
 int main(int argc, char **argv) {
   (void)argv;
   AppState state = {0};
@@ -310,7 +394,7 @@ int main(int argc, char **argv) {
   gtk_window_set_title(GTK_WINDOW(state.window), "gbashrun");
   gtk_window_set_keep_above(GTK_WINDOW(state.window), TRUE);
   gtk_window_set_modal(GTK_WINDOW(state.window), TRUE);
-  gtk_widget_set_size_request(state.window, 800, 250);
+  gtk_window_set_default_size(GTK_WINDOW(state.window), 800, 250);
   gtk_widget_set_can_focus(state.window, TRUE);
   g_signal_connect(state.window, "delete-event", G_CALLBACK(on_window_delete),
                    &state);
@@ -352,6 +436,7 @@ int main(int argc, char **argv) {
   g_io_add_watch(state.io_channel, G_IO_HUP, on_pty_hup, &state);
 
   gtk_widget_show_all(state.window);
+  place_window_one_third(GTK_WINDOW(state.window));
   gtk_window_present(GTK_WINDOW(state.window));
   gtk_widget_grab_focus(state.window);
 
